@@ -4,6 +4,7 @@ package io.card.payment;
  * See the file "LICENSE.md" for the full license governing this code.
  */
 
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.ImageFormat;
@@ -11,9 +12,13 @@ import android.graphics.Rect;
 import android.hardware.Camera;
 import android.hardware.Camera.Parameters;
 import android.hardware.Camera.Size;
+import android.os.Build;
 import android.util.Log;
+import android.view.Surface;
 import android.view.SurfaceHolder;
+import android.view.WindowManager;
 
+import java.io.File;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.util.HashMap;
@@ -41,13 +46,12 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
     // value based on phone? or
     // change focus behavior?
 
+    private static final int DEFAULT_UNBLUR_DIGITS = -1; // no blur per default
+
     private static final int CAMERA_CONNECT_TIMEOUT = 5000;
     private static final int CAMERA_CONNECT_RETRY_INTERVAL = 50;
 
     static final int ORIENTATION_PORTRAIT = 1;
-    //static final int ORIENTATION_PORTRAIT_UPSIDE_DOWN = 2;
-    //static final int ORIENTATION_LANDSCAPE_RIGHT = 3;
-    //static final int ORIENTATION_LANDSCAPE_LEFT = 4;
 
     // these values MUST match those in dmz_constants.h
     static final int CREDIT_CARD_TARGET_WIDTH = 428; // kCreditCardTargetWidth
@@ -58,7 +62,11 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
 
     public static native boolean nUseTegra();
 
+    public static native boolean nUseX86();
+
     private native void nSetup(boolean shouldDetectOnly, float minFocusScore);
+
+    private native void nSetup(boolean shouldDetectOnly, float minFocusScore, int unBlur);
 
     private native void nResetAnalytics();
 
@@ -73,12 +81,13 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
 
     private Bitmap detectedBitmap;
 
-    private static boolean manualFallbackForError = false;
+    private static boolean manualFallbackForError;
 
     // member data
     protected WeakReference<CardIOActivity> mScanActivityRef;
     private boolean mSuppressScan = false;
     private boolean mScanExpiry;
+    private int mUnblurDigits = DEFAULT_UNBLUR_DIGITS;
 
     // read by CardIOActivity to set up Preview
     final int mPreviewWidth = 640;
@@ -88,18 +97,16 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
 
     private boolean mFirstPreviewFrame = true;
     private long captureStart;
-    private long mAutoFocusStartedAt = 0;
-    private long mAutoFocusCompletedAt = 0;
+    private long mAutoFocusStartedAt;
+    private long mAutoFocusCompletedAt;
 
-    private DetectionInfo mLastDetectionInfo;
-
-    private Camera mCamera = null;
+    private Camera mCamera;
     private byte[] mPreviewBuffer;
 
     // accessed by test harness subclass.
     protected boolean useCamera = true;
 
-    private boolean isSurfaceValid = false;
+    private boolean isSurfaceValid;
 
     private int numManualRefocus;
     private int numAutoRefocus;
@@ -114,25 +121,30 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
         Log.i(Util.PUBLIC_LOG_TAG, "card.io " + BuildConfig.PRODUCT_VERSION + " " + BuildConfig.BUILD_TIME);
 
         try {
-            System.loadLibrary("cardioDecider");
-            Log.d(Util.PUBLIC_LOG_TAG, "Loaded card.io decider library.  nUseNeon():" + nUseNeon()
-                    + ",nUseTegra():" + nUseTegra());
+            loadLibrary("cardioDecider");
+            Log.d(Util.PUBLIC_LOG_TAG, "Loaded card.io decider library.");
+            Log.d(Util.PUBLIC_LOG_TAG, "    nUseNeon(): " + nUseNeon());
+            Log.d(Util.PUBLIC_LOG_TAG, "    nUseTegra():" + nUseTegra());
+            Log.d(Util.PUBLIC_LOG_TAG, "    nUseX86():  " + nUseX86());
 
-            if (nUseNeon() || nUseTegra()) {
-                System.loadLibrary("opencv_core");
+            if (usesSupportedProcessorArch()) {
+                loadLibrary("opencv_core");
                 Log.d(Util.PUBLIC_LOG_TAG, "Loaded opencv core library");
-                System.loadLibrary("opencv_imgproc");
+                loadLibrary("opencv_imgproc");
                 Log.d(Util.PUBLIC_LOG_TAG, "Loaded opencv imgproc library");
             }
             if (nUseNeon()) {
-                System.loadLibrary("cardioRecognizer");
+                loadLibrary("cardioRecognizer");
                 Log.i(Util.PUBLIC_LOG_TAG, "Loaded card.io NEON library");
+            } else if (nUseX86()) {
+                loadLibrary("cardioRecognizer");
+                Log.i(Util.PUBLIC_LOG_TAG, "Loaded card.io x86 library");
             } else if (nUseTegra()) {
-                System.loadLibrary("cardioRecognizer_tegra2");
+                loadLibrary("cardioRecognizer_tegra2");
                 Log.i(Util.PUBLIC_LOG_TAG, "Loaded card.io Tegra2 library");
             } else {
                 Log.w(Util.PUBLIC_LOG_TAG,
-                        "unsupported processor - card.io scanning requires ARMv7 architecture");
+                        "unsupported processor - card.io scanning requires ARMv7 or x86 architecture");
                 manualFallbackForError = true;
             }
         } catch (UnsatisfiedLinkError e) {
@@ -142,8 +154,39 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
         }
     }
 
+    /**
+     * Custom loadLibrary method that first tries to load the libraries from the built-in libs
+     * directory and if it fails, tries to use the alternative libs path if one is set.
+     *
+     * No checks are performed to ensure that the native libraries match the cardIO library version.
+     * This needs to be handled by the consuming application.
+     */
+    private static void loadLibrary(String libraryName) throws UnsatisfiedLinkError {
+        try {
+            System.loadLibrary(libraryName);
+        } catch (UnsatisfiedLinkError e) {
+            String altLibsPath = CardIONativeLibsConfig.getAlternativeLibsPath();
+            if (altLibsPath == null || altLibsPath.length() == 0) {
+                throw e;
+            }
+            if (!File.separator.equals(altLibsPath.charAt(altLibsPath.length() - 1))) {
+                altLibsPath += File.separator;
+            }
+            String fullPath = altLibsPath + Build.CPU_ABI + File.separator +
+                    System.mapLibraryName(libraryName);
+            Log.d(Util.PUBLIC_LOG_TAG, "loadLibrary failed for library " + libraryName + ". Trying " + fullPath);
+            // If we couldn't find the library in the normal places and we have an additional
+            // search path, try loading from there.
+            System.load(fullPath);
+        }
+    }
+
+    private static boolean usesSupportedProcessorArch() {
+        return nUseNeon() || nUseTegra() || nUseX86();
+    }
+
     static boolean processorSupported() {
-        return (!manualFallbackForError && (nUseNeon() || nUseTegra()));
+        return (!manualFallbackForError && (usesSupportedProcessorArch()));
     }
 
     CardScanner(CardIOActivity scanActivity, int currentFrameOrientation) {
@@ -152,10 +195,11 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
             mSuppressScan = scanIntent.getBooleanExtra(CardIOActivity.EXTRA_SUPPRESS_SCAN, false);
             mScanExpiry = scanIntent.getBooleanExtra(CardIOActivity.EXTRA_REQUIRE_EXPIRY, false)
                     && scanIntent.getBooleanExtra(CardIOActivity.EXTRA_SCAN_EXPIRY, true);
+            mUnblurDigits = scanIntent.getIntExtra(CardIOActivity.EXTRA_UNBLUR_DIGITS, DEFAULT_UNBLUR_DIGITS);
         }
-        mScanActivityRef = new WeakReference<CardIOActivity>(scanActivity);
+        mScanActivityRef = new WeakReference<>(scanActivity);
         mFrameOrientation = currentFrameOrientation;
-        nSetup(mSuppressScan, MIN_FOCUS_SCORE);
+        nSetup(mSuppressScan, MIN_FOCUS_SCORE, mUnblurDigits);
     }
 
     /**
@@ -179,8 +223,7 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
                         Log.e(Util.PUBLIC_LOG_TAG, "Interrupted while waiting for camera", e1);
                     }
                 } catch (Exception e) {
-                    Log.e(Util.PUBLIC_LOG_TAG,
-                            "Unexpected exception. Please report it to support@card.io", e);
+                    Log.e(Util.PUBLIC_LOG_TAG, "Unexpected exception. Please report it as a GitHub issue", e);
                     maxTimeout = 0;
                 }
 
@@ -191,7 +234,6 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
     }
 
     void prepareScanner() {
-        Log.v(TAG, "prepareScanner()");
         mFirstPreviewFrame = true;
         mAutoFocusStartedAt = 0;
         mAutoFocusCompletedAt = 0;
@@ -207,11 +249,9 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
             if (mCamera == null) {
                 Log.e(Util.PUBLIC_LOG_TAG, "prepare scanner couldn't connect to camera!");
                 return;
-            } else {
-                Log.v(TAG, "camera is connected");
             }
 
-            mCamera.setDisplayOrientation(90);
+            setCameraDisplayOrientation(mCamera);
 
             Camera.Parameters parameters = mCamera.getParameters();
 
@@ -235,8 +275,6 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
                 }
             }
 
-            Log.d(TAG, "- parameters: " + parameters);
-
             parameters.setPreviewSize(mPreviewWidth, mPreviewHeight);
 
             mCamera.setParameters(parameters);
@@ -253,11 +291,8 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
 
     @SuppressWarnings("deprecation")
     boolean resumeScanning(SurfaceHolder holder) {
-        Log.v(TAG, "resumeScanning(" + holder + ")");
         if (mCamera == null) {
-            Log.v(TAG, "preparing the scanner...");
             prepareScanner();
-            Log.v(TAG, "preparations complete");
         }
         if (useCamera && mCamera == null) {
             // prepare failed!
@@ -268,19 +303,10 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
         assert holder != null;
 
         if (useCamera && mPreviewBuffer == null) {
-            int previewFormat = ImageFormat.NV21; // the default.
-
-            Log.v(TAG, "- mCamera:" + mCamera);
             Camera.Parameters parameters = mCamera.getParameters();
-            previewFormat = parameters.getPreviewFormat();
-
-            Log.v(TAG, "- preview format: " + previewFormat);
-
+            int previewFormat = parameters.getPreviewFormat();
             int bytesPerPixel = ImageFormat.getBitsPerPixel(previewFormat) / 8;
-            Log.v(TAG, "- bytes per pixel: " + bytesPerPixel);
-
             int bufferSize = mPreviewWidth * mPreviewHeight * bytesPerPixel * 3;
-            Log.v(TAG, "- buffer size: " + bufferSize);
 
             mPreviewBuffer = new byte[bufferSize];
             mCamera.addCallbackBuffer(mPreviewBuffer);
@@ -319,10 +345,8 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
             mCamera.setPreviewCallback(null);
             mCamera.release();
             mPreviewBuffer = null;
-            Log.d(TAG, "- released camera");
             mCamera = null;
         }
-        Log.i(TAG, "scan paused"); // tests look for this message. don't delete it.
     }
 
     public void endScanning() {
@@ -342,7 +366,6 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
         // method name from http://www.youtube.com/watch?v=-WmGvYDLsj4
         assert holder != null;
         assert holder.getSurface() != null;
-        Log.d(TAG, "surfaceFrame: " + String.valueOf(holder.getSurfaceFrame()));
         mFirstPreviewFrame = true;
 
         if (useCamera) {
@@ -355,8 +378,6 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
             try {
                 mCamera.startPreview();
                 mCamera.autoFocus(this);
-
-                Log.d(TAG, "startPreview success");
             } catch (RuntimeException e) {
                 Log.e(Util.PUBLIC_LOG_TAG, "startPreview failed on camera. Error: ", e);
                 return false;
@@ -370,10 +391,7 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
      */
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
-        // The Surface has been created, acquire the camera and tell it where
-        // to draw.
-        Log.d(TAG, "Preview.surfaceCreated()");
-
+        // The Surface has been created, acquire the camera and tell it where to draw.
         if (mCamera != null || !useCamera) {
             isSurfaceValid = true;
             makePreviewGo(holder);
@@ -381,8 +399,6 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
             Log.wtf(Util.PUBLIC_LOG_TAG, "CardScanner.surfaceCreated() - camera is null!");
             return;
         }
-
-        Log.d(TAG, "Preview.surfaceCreated(), surface is valid");
     }
 
     /*
@@ -391,7 +407,6 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
      */
     @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-
         Log.d(TAG, String.format("Preview.surfaceChanged(holder?:%b, f:%d, w:%d, h:%d )",
                 (holder != null), format, width, height));
     }
@@ -401,7 +416,6 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
      */
     @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
-        Log.d(TAG, "Preview.surfaceDestroyed()");
         if (mCamera != null) {
             try {
                 mCamera.stopPreview();
@@ -418,8 +432,6 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
      * This method is called by Android, never directly by application code.
      */
     private static boolean processingInProgress = false;
-
-    private int frameCount = 0;
 
     @Override
     public void onPreviewFrame(byte[] data, Camera camera) {
@@ -442,7 +454,6 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
 
         // TODO: eliminate this foolishness and measure/layout properly.
         if (mFirstPreviewFrame) {
-            Log.d(TAG, "mFirstPreviewFrame");
             mFirstPreviewFrame = false;
             mFrameOrientation = ORIENTATION_PORTRAIT;
             mScanActivityRef.get().onFirstFrame(ORIENTATION_PORTRAIT);
@@ -458,7 +469,6 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
         if (!sufficientFocus) {
             triggerAutoFocus(false);
         } else if (dInfo.predicted() || (mSuppressScan && dInfo.detected())) {
-            Log.d(TAG, "detected card: " + dInfo.creditCard());
             mScanActivityRef.get().onCardDetected(detectedBitmap, dInfo);
         }
         // give the image buffer back to the camera, AFTER we're done reading
@@ -471,7 +481,6 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
     }
 
     void onEdgeUpdate(DetectionInfo dInfo) {
-        // Log.d(TAG, "onEdgeUpdate");
         mScanActivityRef.get().onEdgeUpdate(dInfo);
     }
 
@@ -536,9 +545,7 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
     }
 
     void toggleFlash() {
-        Log.d(TAG, "toggleFlash: currently " + (isFlashOn() ? "ON" : "OFF"));
         setFlashOn(!isFlashOn());
-        Log.d(TAG, "toggleFlash - now " + (isFlashOn() ? "ON" : "OFF"));
     }
 
     // ------------------------------------------------------------------------
@@ -589,7 +596,6 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
 
     public boolean setFlashOn(boolean b) {
         if (mCamera != null) {
-            Log.d(TAG, "setFlashOn: " + b);
             try {
                 Camera.Parameters params = mCamera.getParameters();
                 params.setFlashMode(b ? Parameters.FLASH_MODE_TORCH : Parameters.FLASH_MODE_OFF);
@@ -603,5 +609,50 @@ class CardScanner implements Camera.PreviewCallback, Camera.AutoFocusCallback,
             }
         }
         return false;
+    }
+
+    private void setCameraDisplayOrientation(Camera mCamera) {
+        int result;
+
+        /* check API level. If upper API level 21, re-calculate orientation. */
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            android.hardware.Camera.CameraInfo info =
+                    new android.hardware.Camera.CameraInfo();
+            android.hardware.Camera.getCameraInfo(0, info);
+            int degrees = getRotationalOffset();
+            int cameraOrientation = info.orientation;
+            result = (cameraOrientation - degrees + 360) % 360;
+        } else {
+            /* if API level is lower than 21, use the default value */
+            result = 90;
+        }
+
+        /*set display orientation*/
+        mCamera.setDisplayOrientation(result);
+    }
+
+    /**
+     * @see <a
+     * href="http://stackoverflow.com/questions/12216148/android-screen-orientation-differs-between-devices">SO
+     * post</a>
+     */
+    int getRotationalOffset() {
+        final int rotationOffset;
+        // Check "normal" screen orientation and adjust accordingly
+        int naturalOrientation = ((WindowManager) mScanActivityRef.get().getSystemService(Context.WINDOW_SERVICE))
+                .getDefaultDisplay().getRotation();
+        if (naturalOrientation == Surface.ROTATION_0) {
+            rotationOffset = 0;
+        } else if (naturalOrientation == Surface.ROTATION_90) {
+            rotationOffset = 90;
+        } else if (naturalOrientation == Surface.ROTATION_180) {
+            rotationOffset = 180;
+        } else if (naturalOrientation == Surface.ROTATION_270) {
+            rotationOffset = 270;
+        } else {
+            // just hope for the best (shouldn't happen)
+            rotationOffset = 0;
+        }
+        return rotationOffset;
     }
 }

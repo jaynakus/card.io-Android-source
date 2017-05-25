@@ -12,8 +12,8 @@ import io.card.payment.i18n.SupportedLocale;
 
 public class LocalizedStringsEN implements SupportedLocale<StringKey> {
 
-    private static Map<StringKey, String> mDisplay = new HashMap<StringKey, String>();
-    private static Map<String, String> mAdapted = new HashMap<String, String>();
+    private static Map<StringKey, String> mDisplay = new HashMap<>();
+    private static Map<String, String> mAdapted = new HashMap<>();
 
     @Override
     public String getName() {
@@ -36,10 +36,12 @@ public class LocalizedStringsEN implements SupportedLocale<StringKey> {
         mDisplay.put(StringKey.CARDTYPE_DISCOVER, "Discover");
         mDisplay.put(StringKey.CARDTYPE_JCB, "JCB");
         mDisplay.put(StringKey.CARDTYPE_MASTERCARD, "MasterCard");
+        mDisplay.put(StringKey.CARDTYPE_MAESTRO, "Maestro");
         mDisplay.put(StringKey.CARDTYPE_VISA, "Visa");
         mDisplay.put(StringKey.DONE, "Done");
         mDisplay.put(StringKey.ENTRY_CVV, "CVV");
         mDisplay.put(StringKey.ENTRY_POSTAL_CODE, "Postal Code");
+        mDisplay.put(StringKey.ENTRY_CARDHOLDER_NAME, "Cardholder Name");
         mDisplay.put(StringKey.ENTRY_EXPIRES, "Expires");
         mDisplay.put(StringKey.EXPIRES_PLACEHOLDER, "MM/YY");
         mDisplay.put(StringKey.SCAN_GUIDE, "Hold card here.\nIt will scan automatically.");

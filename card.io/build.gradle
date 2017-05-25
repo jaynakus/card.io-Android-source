@@ -1,16 +1,7 @@
-buildscript {
-    repositories {
-        mavenCentral()
-    }
-    dependencies {
-        classpath 'com.android.tools.build:gradle:1.0.1'
-    }
-}
-
 apply plugin: 'com.android.library'
 apply plugin: 'maven'
 apply plugin: 'signing'
-
+apply plugin: 'io.codearte.nexus-staging'
 
 repositories {
     mavenCentral()
@@ -21,10 +12,6 @@ def getBuildVersion = { ->
 }
 
 ext {
-    sdkDir = android.plugin.sdkFolder
-    ndkDir = android.plugin.ndkFolder
-    adb = new File("${sdkDir}/platform-tools/adb")
-
     build_time = new Date().format("MM/dd/yyyy HH:mm:ss Z")
     build_year = new Date().format("yyyy")
     product_name = "card.io-Android-SDK"
@@ -32,19 +19,23 @@ ext {
 }
 
 android {
-    compileSdkVersion rootProject.ext.compileSdkVersion
+    compileSdkVersion rootProject.ext.sdkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
 
     defaultConfig {
-        minSdkVersion 8
-        targetSdkVersion 21
+        minSdkVersion 16
+        targetSdkVersion rootProject.ext.sdkVersion
 
         buildConfigField "String", "PRODUCT_NAME", "\"${product_name}\""
         buildConfigField "String", "PRODUCT_VERSION", "\"${product_version}\""
         buildConfigField "String", "BUILD_TIME", "\"${build_time}\""
 
-        testApplicationId 'io.card.development'
+        consumerProguardFiles 'release-proguard.cfg'
+
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
     }
+
+    resourcePrefix 'cio_'
 
     sourceSets.main {
         jni.srcDirs = []
@@ -62,14 +53,14 @@ android {
     }
 
     task cleanNative(type: Exec, description: 'Clean JNI object files') {
-        commandLine "$ndkDir/ndk-build",
+        commandLine "$android.ndkDirectory/ndk-build",
                 '-C', file('src/main/jni').absolutePath,
                 'clean'
     }
     clean.dependsOn cleanNative
 
     task buildNative(type: Exec, description: 'Compile JNI source via NDK') {
-        commandLine "$ndkDir/ndk-build",
+        commandLine "$android.ndkDirectory/ndk-build",
                 '-C', file('src/main/jni').absolutePath,
                 '-j', Runtime.runtime.availableProcessors(),
                 'all'
@@ -87,7 +78,8 @@ android {
 }
 
 dependencies {
-    androidTestCompile "com.jayway.android.robotium:robotium-solo:5.2.1"
+    testCompile "junit:junit:4.12"
+    testCompile "org.robolectric:robolectric:3.1.2"
 }
 
 // TODO remove the variant specific stuff from below - card.io doesn't have flavors
@@ -104,7 +96,7 @@ android.libraryVariants.all { variant ->
         return;
     }
 
-    task "${variantName}Doc"(dependsOn: "compile${variantName.capitalize()}Java", type: Javadoc) {
+    task "${variantName}Doc"(dependsOn: "compile${variantName.capitalize()}JavaWithJavac", type: Javadoc) {
         description = "Generates javadoc for build $name"
         destinationDir = new File(destinationDir, variantName)
         source = variant.javaCompile.source
@@ -112,7 +104,7 @@ android.libraryVariants.all { variant ->
         classpath = files(
                 variant.javaCompile.classpath,
                 variantCompiledClassesDir,
-                project.plugins.findPlugin("com.android.library").bootClasspath
+                android.bootClasspath
         )
 
         include 'io/card/payment/*.java'
@@ -130,7 +122,7 @@ android.libraryVariants.all { variant ->
         // enables links to Java 7 docs
         options.links("http://docs.oracle.com/javase/7/docs/api/")
         // enables links to Android docs.
-        options.linksOffline("http://d.android.com/reference", "${sdkDir}/docs/reference")
+        options.linksOffline("http://d.android.com/reference", "${android.sdkDirectory}/docs/reference")
     }
 
     task javadocJar(type: Jar, dependsOn: "${variantName}Doc") {
@@ -153,14 +145,24 @@ android.libraryVariants.all { variant ->
         sign configurations.archives
     }
 
-    // these should be specified in the gradle.properties file as:
-    // systemProp.sonatypeUsername=xxxxxxx
-    // systemProp.sonatypePassword=yyyyyyy
-    def sonatypeUsername = System.properties.containsKey('sonatypeUsername') ? System.properties['sonatypeUsername'] : ''
-    def sonatypePassword = System.properties.containsKey('sonatypePassword') ? System.properties['sonatypePassword'] : ''
+    // these should be specified in the local.properties file as:
+    // sonatypeUsername=xxxxxxx
+    // sonatypePassword=yyyyyyy
+
+    Properties properties = new Properties()
+    properties.load(project.rootProject.file('local.properties').newDataInputStream())
+    def sonatypeUsername = properties.getProperty('sonatypeUsername')
+    def sonatypePassword = properties.getProperty('sonatypePassword')
+
+    nexusStaging {
+        packageGroup = "io.card"
+        username = sonatypeUsername
+        password = sonatypePassword
+    }
 
     uploadArchives {
         doFirst {
+            assert sonatypeUsername != null && sonatypePassword != null : "Please set sonatypeUsername and sonatypePassword in local.properties"
             println "***"
             println "uploading archives using username: '" + sonatypeUsername + "'"
             println "***"

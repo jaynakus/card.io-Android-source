@@ -12,8 +12,8 @@ import io.card.payment.i18n.SupportedLocale;
 
 public class LocalizedStringsZH_HANT implements SupportedLocale<StringKey> {
 
-    private static Map<StringKey, String> mDisplay = new HashMap<StringKey, String>();
-    private static Map<String, String> mAdapted = new HashMap<String, String>();
+    private static Map<StringKey, String> mDisplay = new HashMap<>();
+    private static Map<String, String> mAdapted = new HashMap<>();
 
     @Override
     public String getName() {
@@ -40,8 +40,9 @@ public class LocalizedStringsZH_HANT implements SupportedLocale<StringKey> {
         mDisplay.put(StringKey.DONE, "完成");
         mDisplay.put(StringKey.ENTRY_CVV, "CVV");
         mDisplay.put(StringKey.ENTRY_POSTAL_CODE, "郵遞區號");
+        mDisplay.put(StringKey.ENTRY_CARDHOLDER_NAME, "持卡人名稱");
         mDisplay.put(StringKey.ENTRY_EXPIRES, "到期日");
-        mDisplay.put(StringKey.EXPIRES_PLACEHOLDER, "月／年");
+        mDisplay.put(StringKey.EXPIRES_PLACEHOLDER, "月 / 年");
         mDisplay.put(StringKey.SCAN_GUIDE, "將信用卡置於此處。\n裝置會自動掃描。");
         mDisplay.put(StringKey.KEYBOARD, "鍵盤…");
         mDisplay.put(StringKey.ENTRY_CARD_NUMBER, "卡號");

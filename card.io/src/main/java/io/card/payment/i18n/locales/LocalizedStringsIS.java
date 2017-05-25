@@ -12,8 +12,8 @@ import io.card.payment.i18n.SupportedLocale;
 
 public class LocalizedStringsIS implements SupportedLocale<StringKey> {
 
-    private static Map<StringKey, String> mDisplay = new HashMap<StringKey, String>();
-    private static Map<String, String> mAdapted = new HashMap<String, String>();
+    private static Map<StringKey, String> mDisplay = new HashMap<>();
+    private static Map<String, String> mAdapted = new HashMap<>();
 
     @Override
     public String getName() {
@@ -40,6 +40,7 @@ public class LocalizedStringsIS implements SupportedLocale<StringKey> {
         mDisplay.put(StringKey.DONE, "Lokið");
         mDisplay.put(StringKey.ENTRY_CVV, "CVV");
         mDisplay.put(StringKey.ENTRY_POSTAL_CODE, "Póstnúmer");
+        mDisplay.put(StringKey.ENTRY_CARDHOLDER_NAME, "Nafn Korthafa");
         mDisplay.put(StringKey.ENTRY_EXPIRES, "Rennur út");
         mDisplay.put(StringKey.EXPIRES_PLACEHOLDER, "MM/ÁÁ");
         mDisplay.put(StringKey.SCAN_GUIDE, "Haltu kortinu kyrru hér.\nÞað verður sjálvirkt skannað.");

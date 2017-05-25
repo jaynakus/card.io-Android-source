@@ -12,8 +12,8 @@ import io.card.payment.i18n.SupportedLocale;
 
 public class LocalizedStringsTR implements SupportedLocale<StringKey> {
 
-    private static Map<StringKey, String> mDisplay = new HashMap<StringKey, String>();
-    private static Map<String, String> mAdapted = new HashMap<String, String>();
+    private static Map<StringKey, String> mDisplay = new HashMap<>();
+    private static Map<String, String> mAdapted = new HashMap<>();
 
     @Override
     public String getName() {
@@ -40,6 +40,7 @@ public class LocalizedStringsTR implements SupportedLocale<StringKey> {
         mDisplay.put(StringKey.DONE, "Bitti");
         mDisplay.put(StringKey.ENTRY_CVV, "CVV");
         mDisplay.put(StringKey.ENTRY_POSTAL_CODE, "Posta Kodu");
+        mDisplay.put(StringKey.ENTRY_CARDHOLDER_NAME, "Kart sahibinin adı");
         mDisplay.put(StringKey.ENTRY_EXPIRES, "Son kullanma tarihi");
         mDisplay.put(StringKey.EXPIRES_PLACEHOLDER, "AA/YY");
         mDisplay.put(StringKey.SCAN_GUIDE, "Kartınızı buraya tutun.\nOtomatik olarak taranacaktır.");

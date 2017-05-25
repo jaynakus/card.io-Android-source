@@ -12,8 +12,8 @@ import io.card.payment.i18n.SupportedLocale;
 
 public class LocalizedStringsRU implements SupportedLocale<StringKey> {
 
-    private static Map<StringKey, String> mDisplay = new HashMap<StringKey, String>();
-    private static Map<String, String> mAdapted = new HashMap<String, String>();
+    private static Map<StringKey, String> mDisplay = new HashMap<>();
+    private static Map<String, String> mAdapted = new HashMap<>();
 
     @Override
     public String getName() {
@@ -40,12 +40,13 @@ public class LocalizedStringsRU implements SupportedLocale<StringKey> {
         mDisplay.put(StringKey.DONE, "Готово");
         mDisplay.put(StringKey.ENTRY_CVV, "Код безопасности");
         mDisplay.put(StringKey.ENTRY_POSTAL_CODE, "Индекс");
-        mDisplay.put(StringKey.ENTRY_EXPIRES, "Действительна до");
+        mDisplay.put(StringKey.ENTRY_CARDHOLDER_NAME, "Имя и фамилия владельца");
+        mDisplay.put(StringKey.ENTRY_EXPIRES, "Действ. до");
         mDisplay.put(StringKey.EXPIRES_PLACEHOLDER, "ММ/ГГ");
-        mDisplay.put(StringKey.SCAN_GUIDE, "Держите карту внутри рамки.\nОна будет считана\nавтоматически.");
+        mDisplay.put(StringKey.SCAN_GUIDE, "Держите карту внутри рамки.\nОна будет считана автоматически.");
         mDisplay.put(StringKey.KEYBOARD, "Клавиатура…");
         mDisplay.put(StringKey.ENTRY_CARD_NUMBER, "Номер карты");
-        mDisplay.put(StringKey.MANUAL_ENTRY_TITLE, "Информация о карте");
+        mDisplay.put(StringKey.MANUAL_ENTRY_TITLE, "Ввести данные вручную");
         mDisplay.put(StringKey.ERROR_NO_DEVICE_SUPPORT, "В данном устройстве нет опции считывания номера карты с помощью фотокамеры.");
         mDisplay.put(StringKey.ERROR_CAMERA_CONNECT_FAIL, "Фотокамера устройства недоступна.");
         mDisplay.put(StringKey.ERROR_CAMERA_UNEXPECTED_FAIL, "Возникла незапланированная ошибка при открытии фотокамеры устройства.");

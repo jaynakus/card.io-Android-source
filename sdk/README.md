@@ -36,7 +36,7 @@ The information in this guide is enough to get started. For additional details, 
 
 *   Rear-facing camera.
 *   Android SDK version 8 (Android 2.2) or later.
-*   ARMv7 processor.
+*   armeabi-v7a, arm64-v8, x86, or x86_64 processor.
 
 A manual entry fallback mode is provided for devices that do not meet these requirements.
 
@@ -79,15 +79,6 @@ compile 'io.card:android-sdk:REPLACE_VERSION'
     <activity android:name="io.card.payment.CardIOActivity" android:configChanges="keyboardHidden|orientation" />
     <activity android:name="io.card.payment.DataEntryActivity" />
     ```
-
-##### Note: Before you build in release mode, make sure to adjust your proguard configuration by adding the following to `proguard.cnf`:
-
-```
--keep class io.card.**
--keepclassmembers class io.card.** {
-    *;
-}
-```
 
 ### Sample code  (See the SampleApp for an example)
 
@@ -144,7 +135,7 @@ protected void onActivityResult(int requestCode, int resultCode, Intent data) {
             resultDisplayStr = "Scan was canceled.";
         }
         // do something with resultDisplayStr, maybe display it in a textView
-        // resultTextView.setText(resultStr);
+        // resultTextView.setText(resultDisplayStr);
     }
     // else handle other activity results
 }
@@ -153,8 +144,19 @@ protected void onActivityResult(int requestCode, int resultCode, Intent data) {
 ### Hints &amp; Tips
 
 * [Javadocs](http://card-io.github.io/card.io-Android-SDK/) are provided in this repo for a complete reference.
+* Note: the correct proguard file is automatically imported into your gradle project from the `aar` package.  Anyone not using gradle will need to extract the proguard file and add it to their proguard config.
 * card.io errors and warnings will be logged to the "card.io" tag.
 * If upgrading the card.io SDK, first remove all card.io libraries so that you don't accidentally ship obsolete or unnecessary libraries. The bundled libraries may change.
 * Processing images can be memory intensive.
     * [Memory Analysis for Android Applications](http://android-developers.blogspot.com/2011/03/memory-analysis-for-android.html) provides some useful information about how to track and reduce your app's memory useage.
 * card.io recommends the use of [SSL pinning](http://blog.thoughtcrime.org/authenticity-is-broken-in-ssl-but-your-app-ha) when transmitting sensitive information to protect against man-in-the-middle attacks.
+
+Contributing
+------------
+
+Please read our [contributing guidelines](CONTRIBUTING.md) prior to submitting a Pull Request.
+
+License
+-------
+
+Please refer to this repo's [license file](LICENSE).

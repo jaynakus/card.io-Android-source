@@ -7,19 +7,14 @@ package io.card.payment.ui;
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.content.Context;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
-import android.util.Base64;
-import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewGroup.LayoutParams;
 import android.widget.Button;
-import android.widget.TextView;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -144,50 +139,25 @@ public class ViewUtil {
         params.height = height;
     }
 
-    public static void styleAsButton(View view, boolean primary, Context context) {
-        setDimensions(view, LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
-        setPadding(view, "10dip", "0dip", "10dip", "0dip");
-        setBackground(
-                view,
-                primary ? Appearance.buttonBackgroundPrimary(context) : Appearance
-                        .buttonBackgroundSecondary(context));
+    public static void styleAsButton(Button button, boolean primary, Context context, boolean useApplicationTheme) {
+        setDimensions(button, LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
 
-        view.setFocusable(true);
+        button.setFocusable(true);
+        setPadding(button, "10dip", "0dip", "10dip", "0dip");
 
-        view.setMinimumHeight(ViewUtil.typedDimensionValueToPixelsInt(
-                Appearance.BUTTON_HEIGHT, context));
-        if (view instanceof TextView) {
-            styleAsButtonText((TextView) view);
+        if(! useApplicationTheme) {
+
+            setBackground(
+                    button,
+                    primary ? Appearance.buttonBackgroundPrimary(context) : Appearance
+                            .buttonBackgroundSecondary(context));
+
+            button.setGravity(Gravity.CENTER);
+            button.setMinimumHeight(ViewUtil.typedDimensionValueToPixelsInt(
+                    Appearance.BUTTON_HEIGHT, context));
+            button.setTextColor(Appearance.TEXT_COLOR_BUTTON);
+            button.setTextSize(Appearance.TEXT_SIZE_BUTTON);
+            button.setTypeface(Appearance.TYPEFACE_BUTTON);
         }
-        if (!(view instanceof Button)) {
-            view.setClickable(true);
-        }
-    }
-
-    public static void styleAsButtonText(TextView textView) {
-        textView.setGravity(Gravity.CENTER);
-        textView.setTextColor(Appearance.TEXT_COLOR_BUTTON);
-        textView.setTextSize(Appearance.TEXT_SIZE_BUTTON);
-        textView.setTypeface(Appearance.TYPEFACE_BUTTON);
-    }
-
-    public static Bitmap base64ToBitmap(String base64Data, Context context) {
-        return base64ToBitmap(base64Data, context, DisplayMetrics.DENSITY_HIGH);
-    }
-
-    public static Bitmap base64ToBitmap(String base64Data, Context context,
-                                        int displayMetricsDensity) {
-        BitmapFactory.Options options = new BitmapFactory.Options();
-        if (context != null) {
-            DisplayMetrics metrics = context.getResources().getDisplayMetrics();
-            options.inTargetDensity = metrics.densityDpi;
-        } else {
-            options.inTargetDensity = DisplayMetrics.DENSITY_MEDIUM;
-        }
-        options.inDensity = displayMetricsDensity;
-        options.inScaled = false;
-
-        byte[] imageBytes = Base64.decode(base64Data, Base64.DEFAULT);
-        return BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length, options);
     }
 }

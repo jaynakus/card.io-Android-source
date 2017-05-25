@@ -12,8 +12,8 @@ import io.card.payment.i18n.SupportedLocale;
 
 public class LocalizedStringsJA implements SupportedLocale<StringKey> {
 
-    private static Map<StringKey, String> mDisplay = new HashMap<StringKey, String>();
-    private static Map<String, String> mAdapted = new HashMap<String, String>();
+    private static Map<StringKey, String> mDisplay = new HashMap<>();
+    private static Map<String, String> mAdapted = new HashMap<>();
 
     @Override
     public String getName() {
@@ -40,6 +40,7 @@ public class LocalizedStringsJA implements SupportedLocale<StringKey> {
         mDisplay.put(StringKey.DONE, "完了");
         mDisplay.put(StringKey.ENTRY_CVV, "カード確認コード");
         mDisplay.put(StringKey.ENTRY_POSTAL_CODE, "郵便番号");
+        mDisplay.put(StringKey.ENTRY_CARDHOLDER_NAME, "カード保有者の名前");
         mDisplay.put(StringKey.ENTRY_EXPIRES, "有効期限");
         mDisplay.put(StringKey.EXPIRES_PLACEHOLDER, "MM/YY");
         mDisplay.put(StringKey.SCAN_GUIDE, "ここでカードをお持ちください。\n自動的にスキャンされます。");

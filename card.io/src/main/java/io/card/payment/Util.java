@@ -5,9 +5,11 @@ package io.card.payment;
  */
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Point;
@@ -18,6 +20,7 @@ import android.os.Build;
 import android.os.Debug;
 import android.util.Log;
 
+import java.io.ByteArrayOutputStream;
 import java.util.List;
 
 /**
@@ -69,15 +72,6 @@ class Util {
     }
 
     private static boolean hardwareSupportCheck() {
-        Log.i(PUBLIC_LOG_TAG, "Checking hardware support...");
-
-        // we currently need froyo or better (aka Android 2.2, API level 8)
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.FROYO) {
-            Log.w(PUBLIC_LOG_TAG,
-                    "- Android SDK too old. Minimum Android 2.2 / API level 8+ (Froyo) required");
-            return false;
-        }
-
         if (!CardScanner.processorSupported()) {
             Log.w(PUBLIC_LOG_TAG, "- Processor type is not supported");
             return false;
@@ -88,8 +82,12 @@ class Util {
         try {
             c = Camera.open();
         } catch (RuntimeException e) {
-            Log.w(PUBLIC_LOG_TAG, "- Error opening camera: " + e);
-            throw new CameraUnavailableException();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                return true;
+            } else {
+                Log.w(PUBLIC_LOG_TAG, "- Error opening camera: " + e);
+                throw new CameraUnavailableException();
+            }
         }
         if (c == null) {
             Log.w(PUBLIC_LOG_TAG, "- No camera found");
@@ -136,5 +134,24 @@ class Util {
         paint.setAntiAlias(true);
         float[] black = { 0f, 0f, 0f };
         paint.setShadowLayer(1.5f, 0.5f, 0f, Color.HSVToColor(200, black));
+    }
+
+    /**
+     * Writes {@link CardIOActivity#EXTRA_CAPTURED_CARD_IMAGE} to dataIntent if
+     * origIntent has {@link CardIOActivity#EXTRA_RETURN_CARD_IMAGE}.
+     *
+     * @param origIntent
+     * @param dataIntent
+     * @param mOverlay
+     */
+    static void writeCapturedCardImageIfNecessary(
+            Intent origIntent, Intent dataIntent, OverlayView mOverlay){
+        if (origIntent.getBooleanExtra(CardIOActivity.EXTRA_RETURN_CARD_IMAGE, false)
+            && mOverlay != null && mOverlay.getBitmap() != null) {
+            ByteArrayOutputStream scaledCardBytes = new ByteArrayOutputStream();
+            mOverlay.getBitmap().compress(Bitmap.CompressFormat.JPEG, 80, scaledCardBytes);
+            dataIntent.putExtra(CardIOActivity.EXTRA_CAPTURED_CARD_IMAGE, scaledCardBytes.toByteArray());
+        }
+
     }
 }

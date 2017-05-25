@@ -6,9 +6,7 @@ package io.card.payment;
 
 import android.app.Activity;
 import android.content.Intent;
-import android.graphics.Bitmap;
 import android.graphics.Color;
-import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.text.Editable;
@@ -17,9 +15,8 @@ import android.text.InputType;
 import android.text.TextWatcher;
 import android.text.method.DateKeyListener;
 import android.text.method.DigitsKeyListener;
-import android.util.DisplayMetrics;
-import android.util.Log;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.ViewGroup.LayoutParams;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
@@ -48,6 +45,10 @@ public final class DataEntryActivity extends Activity implements TextWatcher {
      * PayPal REST Apis only handle max 20 chars postal code, so we'll do the same here.
      */
     private static final int MAX_POSTAL_CODE_LENGTH = 20;
+    /**
+     * PayPal REST Apis accept max of 175 chars for cardholder name
+     */
+    private static final int MAX_CARDHOLDER_NAME_LENGTH = 175;
     private static final String PADDING_DIP = "4dip";
     private static final String LABEL_LEFT_PADDING_DEFAULT = "2dip";
     private static final String LABEL_LEFT_PADDING_HOLO = "12dip";
@@ -69,6 +70,8 @@ public final class DataEntryActivity extends Activity implements TextWatcher {
     private Validator cvvValidator;
     private EditText postalCodeEdit;
     private Validator postalCodeValidator;
+    private EditText cardholderNameEdit;
+    private Validator cardholderNameValidator;
     private ImageView cardView;
     private Button doneBtn;
     private Button cancelBtn;
@@ -79,12 +82,12 @@ public final class DataEntryActivity extends Activity implements TextWatcher {
     private boolean useApplicationTheme;
     private int defaultTextColor;
 
-    private final String TAG = this.getClass().getName();
+    private static final String TAG = DataEntryActivity.class.getSimpleName();
 
+    @SuppressWarnings("ResourceType")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        Log.v(TAG, "onCreate");
 
         if (null == getIntent().getExtras()) {
             // extras should never be null.  This is some weird android state that we handle by just going back.
@@ -177,6 +180,9 @@ public final class DataEntryActivity extends Activity implements TextWatcher {
                     android.R.attr.textAppearanceLarge);
             numberEdit.setInputType(InputType.TYPE_CLASS_PHONE);
             numberEdit.setHint("1234 5678 1234 5678");
+            if(! useApplicationTheme ) {
+                numberEdit.setHintTextColor(Appearance.TEXT_COLOR_EDIT_TEXT_HINT);
+            }
 
             numberValidator = new CardNumberValidator();
             numberEdit.addTextChangedListener(numberValidator);
@@ -190,7 +196,7 @@ public final class DataEntryActivity extends Activity implements TextWatcher {
         LinearLayout optionLayout = new LinearLayout(this);
         LinearLayout.LayoutParams optionLayoutParam = new LinearLayout.LayoutParams(
                 LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
-        ViewUtil.setPadding(optionLayout, null, PADDING_DIP, null, null);
+        ViewUtil.setPadding(optionLayout, null, PADDING_DIP, null, PADDING_DIP);
         optionLayout.setOrientation(LinearLayout.HORIZONTAL);
 
         boolean requireExpiry = getIntent().getBooleanExtra(CardIOActivity.EXTRA_REQUIRE_EXPIRY, false);
@@ -220,6 +226,9 @@ public final class DataEntryActivity extends Activity implements TextWatcher {
                     android.R.attr.textAppearanceLarge);
             expiryEdit.setInputType(InputType.TYPE_CLASS_PHONE);
             expiryEdit.setHint(LocalizedStrings.getString(StringKey.EXPIRES_PLACEHOLDER));
+            if(! useApplicationTheme ) {
+                expiryEdit.setHintTextColor(Appearance.TEXT_COLOR_EDIT_TEXT_HINT);
+            }
 
             if (capture != null) {
                 expiryValidator = new ExpiryValidator(capture.expiryMonth, capture.expiryYear);
@@ -263,6 +272,9 @@ public final class DataEntryActivity extends Activity implements TextWatcher {
             cvvEdit.setTextAppearance(getApplicationContext(), android.R.attr.textAppearanceLarge);
             cvvEdit.setInputType(InputType.TYPE_CLASS_PHONE);
             cvvEdit.setHint("123");
+            if(! useApplicationTheme ) {
+                cvvEdit.setHintTextColor(Appearance.TEXT_COLOR_EDIT_TEXT_HINT);
+            }
 
             int length = 4;
             if (capture != null) {
@@ -298,13 +310,24 @@ public final class DataEntryActivity extends Activity implements TextWatcher {
             postalCodeLayout
                     .addView(zipLabel, LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
 
+            boolean postalCodeNumericOnly =
+                    getIntent().getBooleanExtra(CardIOActivity.EXTRA_RESTRICT_POSTAL_CODE_TO_NUMERIC_ONLY, false);
+
             postalCodeEdit = new EditText(this);
             postalCodeEdit.setId(editTextIdCounter++);
             postalCodeEdit.setMaxLines(1);
             postalCodeEdit.setImeOptions(EditorInfo.IME_ACTION_DONE);
             postalCodeEdit.setTextAppearance(getApplicationContext(),
                     android.R.attr.textAppearanceLarge);
-            postalCodeEdit.setInputType(InputType.TYPE_CLASS_TEXT);
+            if (postalCodeNumericOnly) {
+                // class is phone to be consistent with other numeric fields.  Perhaps this could be improved.
+                postalCodeEdit.setInputType(InputType.TYPE_CLASS_PHONE);
+            } else {
+                postalCodeEdit.setInputType(InputType.TYPE_CLASS_TEXT);
+            }
+            if(! useApplicationTheme ) {
+                postalCodeEdit.setHintTextColor(Appearance.TEXT_COLOR_EDIT_TEXT_HINT);
+            }
 
             postalCodeValidator = new MaxLengthValidator(MAX_POSTAL_CODE_LENGTH);
             postalCodeEdit.addTextChangedListener(postalCodeValidator);
@@ -320,6 +343,9 @@ public final class DataEntryActivity extends Activity implements TextWatcher {
         }
 
         mainLayout.addView(optionLayout, optionLayoutParam);
+
+        addCardholderNameIfNeeded(mainLayout);
+
         wrapperLayout.addView(mainLayout, mainParams);
         ViewUtil.setMargins(mainLayout, Appearance.CONTAINER_MARGIN_HORIZONTAL,
                 Appearance.CONTAINER_MARGIN_VERTICAL, Appearance.CONTAINER_MARGIN_HORIZONTAL,
@@ -350,10 +376,12 @@ public final class DataEntryActivity extends Activity implements TextWatcher {
         doneBtn.setEnabled(false);
 
         buttonLayout.addView(doneBtn, doneParam);
-        ViewUtil.styleAsButton(doneBtn, true, this);
+        ViewUtil.styleAsButton(doneBtn, true, this, useApplicationTheme);
         ViewUtil.setPadding(doneBtn, "5dip", null, "5dip", null);
-        ViewUtil.setMargins(doneBtn, "8dip", "8dip", "4dip", "8dip");
-        doneBtn.setTextSize(Appearance.TEXT_SIZE_MEDIUM_BUTTON);
+        ViewUtil.setMargins(doneBtn, "8dip", "8dip", "8dip", "8dip");
+        if(!useApplicationTheme) {
+            doneBtn.setTextSize(Appearance.TEXT_SIZE_MEDIUM_BUTTON);
+        }
 
         cancelBtn = new Button(this);
 
@@ -364,17 +392,17 @@ public final class DataEntryActivity extends Activity implements TextWatcher {
         cancelBtn.setOnClickListener(new Button.OnClickListener() {
             @Override
             public void onClick(View v) {
-                DataEntryActivity.this.setResult(CardIOActivity.RESULT_ENTRY_CANCELED);
-                finish();
+                onBackPressed();
             }
         });
 
         buttonLayout.addView(cancelBtn, cancelParam);
-        ViewUtil.styleAsButton(cancelBtn, false, this);
+        ViewUtil.styleAsButton(cancelBtn, false, this, useApplicationTheme);
         ViewUtil.setPadding(cancelBtn, "5dip", null, "5dip", null);
         ViewUtil.setMargins(cancelBtn, "4dip", "8dip", "8dip", "8dip");
-        cancelBtn.setTextSize(Appearance.TEXT_SIZE_MEDIUM_BUTTON);
-
+        if(!useApplicationTheme) {
+            cancelBtn.setTextSize(Appearance.TEXT_SIZE_MEDIUM_BUTTON);
+        }
         container.addView(buttonLayout, buttonLayoutParam);
 
         ActivityHelper.addActionBarIfSupported(this);
@@ -384,9 +412,8 @@ public final class DataEntryActivity extends Activity implements TextWatcher {
         Drawable icon = null;
         boolean usePayPalActionBarIcon = getIntent().getBooleanExtra(CardIOActivity.EXTRA_USE_PAYPAL_ACTIONBAR_ICON, true);
         if (usePayPalActionBarIcon) {
-            Bitmap bitmap = ViewUtil.base64ToBitmap(Base64EncodedImages.paypal_monogram_actionbar_icon, this,
-                    DisplayMetrics.DENSITY_HIGH);
-            icon = new BitmapDrawable(this.getResources(), bitmap);
+            //noinspection deprecation
+            icon = getResources().getDrawable(R.drawable.cio_ic_paypal_monogram);
         }
 
         // update UI to reflect expiry validness
@@ -408,17 +435,27 @@ public final class DataEntryActivity extends Activity implements TextWatcher {
         }
 
         CreditCard result = new CreditCard(numberValidator.getValue(), capture.expiryMonth,
-                capture.expiryYear, cvvValidator.getValue(), postalCodeValidator.getValue());
-        Intent completion = new Intent();
-        completion.putExtra(CardIOActivity.EXTRA_SCAN_RESULT, result);
-        DataEntryActivity.this.setResult(CardIOActivity.RESULT_CARD_INFO, completion);
+                capture.expiryYear, cvvValidator.getValue(), postalCodeValidator.getValue(),
+                cardholderNameValidator.getValue());
+        Intent dataIntent = new Intent();
+        dataIntent.putExtra(CardIOActivity.EXTRA_SCAN_RESULT, result);
+        if(getIntent().hasExtra(CardIOActivity.EXTRA_CAPTURED_CARD_IMAGE)){
+            dataIntent.putExtra(CardIOActivity.EXTRA_CAPTURED_CARD_IMAGE,
+                    getIntent().getByteArrayExtra(CardIOActivity.EXTRA_CAPTURED_CARD_IMAGE));
+        }
+        DataEntryActivity.this.setResult(CardIOActivity.RESULT_CARD_INFO, dataIntent);
+        finish();
+    }
+
+    @Override
+    public void onBackPressed() {
+        DataEntryActivity.this.setResult(CardIOActivity.RESULT_ENTRY_CANCELED);
         finish();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        Log.d(TAG, "onResume()");
 
         getWindow().setFlags(0, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         ActivityHelper.setFlagSecure(this);
@@ -431,12 +468,10 @@ public final class DataEntryActivity extends Activity implements TextWatcher {
             advanceToNextEmptyField();
         }
 
-        if (numberEdit != null || expiryEdit != null || cvvEdit != null || postalCodeEdit != null) {
+        if (numberEdit != null || expiryEdit != null || cvvEdit != null || postalCodeEdit != null || cardholderNameEdit != null) {
             getWindow()
                     .setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
         }
-
-        Log.i(TAG, "ready for manual entry"); // used by tests. don't delete.
     }
 
     private EditText advanceToNextEmptyField() {
@@ -455,12 +490,12 @@ public final class DataEntryActivity extends Activity implements TextWatcher {
 
     private void validateAndEnableDoneButtonIfValid() {
         doneBtn.setEnabled(numberValidator.isValid() && expiryValidator.isValid()
-                && cvvValidator.isValid() && postalCodeValidator.isValid());
-
-        Log.d(TAG, "setting doneBtn.enabled=" + doneBtn.isEnabled());
+                && cvvValidator.isValid() && postalCodeValidator.isValid()
+                && cardholderNameValidator.isValid());
 
         if (autoAcceptDone && numberValidator.isValid() && expiryValidator.isValid()
-                && cvvValidator.isValid() && postalCodeValidator.isValid()) {
+                && cvvValidator.isValid() && postalCodeValidator.isValid()
+                && cardholderNameValidator.isValid()) {
             completed();
         }
     }
@@ -515,10 +550,19 @@ public final class DataEntryActivity extends Activity implements TextWatcher {
                     postalCodeEdit.setTextColor(Appearance.TEXT_COLOR_ERROR);
                 } else {
                     setDefaultColor(postalCodeEdit);
-                    advanceToNextEmptyField();
                 }
             } else {
                 setDefaultColor(postalCodeEdit);
+            }
+        } else if (cardholderNameEdit != null && et == cardholderNameEdit.getText()) {
+            if (cardholderNameValidator.hasFullLength()) {
+                if (!cardholderNameValidator.isValid()) {
+                    cardholderNameEdit.setTextColor(Appearance.TEXT_COLOR_ERROR);
+                } else {
+                    setDefaultColor(cardholderNameEdit);
+                }
+            } else {
+                setDefaultColor(cardholderNameEdit);
             }
         }
 
@@ -542,5 +586,48 @@ public final class DataEntryActivity extends Activity implements TextWatcher {
     public void onTextChanged(CharSequence arg0, int arg1, int arg2, int arg3) {
         // leave empty
 
+    }
+
+    @SuppressWarnings("ResourceType")
+    private void addCardholderNameIfNeeded(ViewGroup mainLayout) {
+        boolean requireCardholderName = getIntent().getBooleanExtra(CardIOActivity.EXTRA_REQUIRE_CARDHOLDER_NAME, false);
+        if (requireCardholderName) {
+            LinearLayout cardholderNameLayout = new LinearLayout(this);
+            ViewUtil.setPadding(cardholderNameLayout, null, PADDING_DIP, null, null);
+            cardholderNameLayout.setOrientation(LinearLayout.VERTICAL);
+
+            TextView cardholderNameLabel = new TextView(this);
+            if(! useApplicationTheme ) {
+                cardholderNameLabel.setTextColor(Appearance.TEXT_COLOR_LABEL);
+            }
+            ViewUtil.setPadding(cardholderNameLabel, labelLeftPadding, null, null, null);
+            cardholderNameLabel.setText(LocalizedStrings.getString(StringKey.ENTRY_CARDHOLDER_NAME));
+
+            cardholderNameLayout
+                    .addView(cardholderNameLabel, LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
+
+            cardholderNameEdit = new EditText(this);
+            cardholderNameEdit.setId(editTextIdCounter++);
+            cardholderNameEdit.setMaxLines(1);
+            cardholderNameEdit.setImeOptions(EditorInfo.IME_ACTION_DONE);
+            cardholderNameEdit.setTextAppearance(getApplicationContext(),
+                    android.R.attr.textAppearanceLarge);
+            cardholderNameEdit.setInputType(InputType.TYPE_CLASS_TEXT);
+            if(! useApplicationTheme ) {
+                cardholderNameEdit.setHintTextColor(Appearance.TEXT_COLOR_EDIT_TEXT_HINT);
+            }
+
+            cardholderNameValidator = new MaxLengthValidator(MAX_CARDHOLDER_NAME_LENGTH);
+            cardholderNameEdit.addTextChangedListener(cardholderNameValidator);
+            cardholderNameEdit.addTextChangedListener(this);
+
+            cardholderNameLayout.addView(cardholderNameEdit, LayoutParams.MATCH_PARENT,
+                    LayoutParams.WRAP_CONTENT);
+
+            mainLayout.addView(cardholderNameLayout, LayoutParams.MATCH_PARENT,
+                    LayoutParams.WRAP_CONTENT);
+        } else {
+            cardholderNameValidator = new AlwaysValid();
+        }
     }
 }

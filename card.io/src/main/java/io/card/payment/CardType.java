@@ -6,6 +6,7 @@ package io.card.payment;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.text.TextUtils;
 import android.util.Pair;
 
@@ -15,7 +16,6 @@ import java.util.Map.Entry;
 
 import io.card.payment.i18n.LocalizedStrings;
 import io.card.payment.i18n.StringKey;
-import io.card.payment.ui.ViewUtil;
 
 /**
  * Enumerates each supported card type. see http://en.wikipedia.org/wiki/Bank_card_number for more
@@ -83,9 +83,9 @@ public enum CardType {
 
     /**
      * Convenience method to return a CardType string (e.g. "Visa", "American Express", "JCB",
-     * "MasterCard", or "Discover") suitable for display. This string will be translated into the
-     * language specified. See {@link CardIOActivity#EXTRA_LANGUAGE_OR_LOCALE} for a detailed
-     * explanation of languageOrLocale.
+     * "Maestro", "MasterCard", or "Discover") suitable for display. This string will be translated
+     * into the language specified. See {@link CardIOActivity#EXTRA_LANGUAGE_OR_LOCALE} for a
+     * detailed explanation of languageOrLocale.
      *
      * @param languageOrLocale See {@link CardIOActivity#EXTRA_LANGUAGE_OR_LOCALE}.
      * @return the display name of the card
@@ -101,6 +101,8 @@ public enum CardType {
                 return LocalizedStrings.getString(StringKey.CARDTYPE_JCB, languageOrLocale);
             case MASTERCARD:
                 return LocalizedStrings.getString(StringKey.CARDTYPE_MASTERCARD, languageOrLocale);
+            case MAESTRO:
+                return LocalizedStrings.getString(StringKey.CARDTYPE_MAESTRO, languageOrLocale);
             case VISA:
                 return LocalizedStrings.getString(StringKey.CARDTYPE_VISA, languageOrLocale);
             case ELKART:
@@ -116,13 +118,14 @@ public enum CardType {
      * @return 15 for AmEx, -1 for unknown, 16 for others.
      */
     public int numberLength() {
-        int result = -1;
+        int result;
         switch (this) {
             case AMEX:
                 result = 15;
                 break;
             case JCB:
             case MASTERCARD:
+            case MAESTRO:
             case VISA:
             case DISCOVER:
             case ELKART:
@@ -147,13 +150,14 @@ public enum CardType {
      * @return 4 for Amex, 3 for others, -1 for unknown
      */
     public int cvvLength() {
-        int result = -1;
+        int result;
         switch (this) {
             case AMEX:
                 result = 4;
                 break;
             case JCB:
             case MASTERCARD:
+            case MAESTRO:
             case VISA:
             case DISCOVER:
             case DINERSCLUB:
@@ -179,39 +183,38 @@ public enum CardType {
      * @return the bitmap icon of the card for display
      */
     public Bitmap imageBitmap(Context context) {
-        String cardImageData = null;
+        int cardImageResource = -1;
         switch (this) {
             case AMEX: {
-                cardImageData = Base64EncodedImages.paypal_sdk_icon_amex_large;
+                cardImageResource = R.drawable.cio_ic_amex;
                 break;
             }
             case VISA: {
-                cardImageData = Base64EncodedImages.paypal_sdk_icon_visa_large;
+                cardImageResource = R.drawable.cio_ic_visa;
                 break;
             }
             case MASTERCARD: {
-                cardImageData = Base64EncodedImages.paypal_sdk_icon_mastercard_large;
+                cardImageResource = R.drawable.cio_ic_mastercard;
                 break;
             }
             case DISCOVER:
             case DINERSCLUB: {
-                cardImageData = Base64EncodedImages.paypal_sdk_icon_discover;
+                cardImageResource = R.drawable.cio_ic_discover;
                 break;
             }
             case JCB: {
-                cardImageData = Base64EncodedImages.paypal_sdk_icon_jcb_large;
+                cardImageResource = R.drawable.cio_ic_jcb;
                 break;
             }
             default: {
-                // use generic cc image by default? nah, because if it's not one of the above, it's not
-                // valid.
-                // cardImageData = Base64EncodedImages.paypal_sdk_icon_jcb_large;
+                // do not use generic image by default, if it's not one of the above, it's not
+                // valid, or it's maestro
                 break;
             }
         }
 
-        if (null != cardImageData) {
-            return ViewUtil.base64ToBitmap(cardImageData, context);
+        if (cardImageResource != -1) {
+            return BitmapFactory.decodeResource(context.getResources(), cardImageResource);
         }
 
         return null;
@@ -251,6 +254,7 @@ public enum CardType {
     static {
         // initialize
         intervalLookup = new HashMap<Pair<String, String>, CardType>();
+        intervalLookup.put(getNewPair("2221", "2720"), CardType.MASTERCARD);    // MasterCard 2-series
         intervalLookup.put(getNewPair("300", "305"), CardType.DINERSCLUB);      // Diners Club (Discover)
         intervalLookup.put(getNewPair("309", null), CardType.DINERSCLUB);       // Diners Club (Discover)
         intervalLookup.put(getNewPair("34", null), CardType.AMEX);              // AmEx

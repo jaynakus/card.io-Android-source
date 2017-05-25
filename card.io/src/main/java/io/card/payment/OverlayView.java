@@ -98,7 +98,7 @@ class OverlayView extends View {
     private int mState;
     private int guideColor;
 
-    private boolean hideCardIOLogo = false;
+    private boolean hideCardIOLogo;
     private String scanInstructions;
 
     // Keep paint objects around for high frequency methods to avoid re-allocating them.
@@ -164,8 +164,6 @@ class OverlayView extends View {
 
     // Public methods used by CardIOActivity
     public void setGuideAndRotation(Rect rect, int rotation) {
-        Log.d(TAG, "setGuideAndRotation: " + rect + ", " + rotation);
-
         mRotation = rotation;
         mGuide = rect;
         invalidate();
@@ -179,8 +177,6 @@ class OverlayView extends View {
             mRotationFlip = 1;
         }
         if (mCameraPreviewRect != null) {
-            Log.d(TAG, "" + mCameraPreviewRect + ", " + topEdgeUIOffset + ", " + mCameraPreviewRect
-                    + ", " + topEdgeUIOffset);
             Point torchPoint = new Point(mCameraPreviewRect.left + topEdgeUIOffset.x,
                     mCameraPreviewRect.top + topEdgeUIOffset.y);
 
@@ -400,13 +396,8 @@ class OverlayView extends View {
 
                 Point p = new Point((int) event.getX(), (int) event.getY());
                 Rect r = Util.rectGivenCenter(p, BUTTON_TOUCH_TOLERANCE, BUTTON_TOUCH_TOLERANCE);
-                Log.d(TAG, "onTouchEvent: " + p);
                 if (mShowTorch && mTorchRect != null && Rect.intersects(mTorchRect, r)) {
-                    Log.d(TAG, "torch touched");
                     mScanActivityRef.get().toggleFlash();
-
-                } else if (mLogoRect != null && Rect.intersects(mLogoRect, r)) {
-                    Log.d(TAG, "logo touched");
                 } else {
                     mScanActivityRef.get().triggerAutoFocus();
                 }
@@ -471,7 +462,7 @@ class OverlayView extends View {
         paint.setTextSize(CARD_NUMBER_MARKUP_FONT_SIZE * mScale);
 
         int len = mDetectedCard.cardNumber.length();
-        float sf = mBitmap.getWidth() / 428f;
+        float sf = mBitmap.getWidth() / (float)CardScanner.CREDIT_CARD_TARGET_WIDTH;
         int yOffset = (int) ((mDetectedCard.yoff * sf - 6));
         for (int i = 0; i < len; i++) {
             int xOffset = (int) (mDetectedCard.xoff[i] * sf);
